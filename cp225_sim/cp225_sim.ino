@@ -9,8 +9,14 @@ bool stringComplete = false;
 
 unsigned long startMillis;  //some global variables available anywhere in the program
 unsigned long currentMillis;
-const unsigned long period = 500;  //the value is a number of milliseconds
+unsigned long period = 1500;  //the value is a number of milliseconds
 unsigned long ticks = 0;
+
+bool printAM = false;
+bool printPH = false;
+bool printER = false;
+bool printMA = false;
+bool printKV = false;
 
 String AMProto = "!AM0001,0001,0000,0100,045000,150608<\n";
 String AM = "!AM";
@@ -36,14 +42,14 @@ unsigned int ph2 = 600;
 unsigned int ph3 = 0;
 
 
-int KV = 1000;
+int KV = 600;
 String StrKV = "!KV";
 String requestKV = "?KV";
 String SetKV = "#KV";
-int actualKV = 1000;
+int actualKV = 600;
 
 
-int MA = 9000;
+unsigned int MA = 1000;
 String StrMA = "!MA";
 String requestMA = "?MA";
 String SetMA = "#MA";
@@ -83,6 +89,9 @@ byte* convertStringToByteArray(String str);
 String MakeERString();
 String PHString();
 String MakeAMString();
+void DumpBytes(String inStr);
+
+
 
 void setup() {
   // put your setup code here, to run once:
@@ -98,6 +107,14 @@ void loop() {
   // put your main code here, to run repeatedly:
   readstring();
   currentMillis = millis();
+  if(KV > ph2)
+  {
+    ER5 = "1";
+  }else
+  {
+    ER5 = "0";
+  }
+  
   
   if (currentMillis - startMillis >= period)  //test whether the period has elapsed
   {
@@ -105,17 +122,19 @@ void loop() {
       {
         if(containsKVStr(inputString))
         {
+          
           KV = extractNumber(inputString);
+          Serial.println(inputString);
           stringComplete = false;
           inputString = "";
           String testStr = StrKV + String(KV) + "\n";
-          Serial.println(testStr);
+          Serial.print(testStr);
         }
      
         if(containsStr(inputString, requestKV))
         {
           String testStr = StrKV + String(KV) + "\n";
-          Serial.println(testStr);
+          Serial.print(testStr);
           stringComplete = false;
           inputString = "";
         }
@@ -129,7 +148,7 @@ void loop() {
           String testStr = StrMA + String(MA) + "\n";
           Serial.println(testStr);
         }
-        if(containsStr(inputString, requestMA))
+        if(containsStr(inputString, requestMA) || containsStr(inputString, "?MA3"))
         {
           String testStr = StrMA + String(MA) + "\n";
           Serial.println(testStr);
@@ -155,16 +174,160 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
+        if(containsStr(inputString, "?ER"))
+        {
+          String testStr = MakeERString();
+          Serial.println(testStr);
+          stringComplete = false;
+          inputString = "";
+        }
+
+
+         if(containsStr(inputString, "#Moff"))
+        {
+          printMA = false;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#Mon"))
+        {
+          printMA = true;
+          stringComplete = false;
+          inputString = "";
+        }
+
+
+        if(containsStr(inputString, "#Koff"))
+        {
+          printKV = false;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#Kon"))
+        {
+          printKV = true;
+          stringComplete = false;
+          inputString = "";
+        }        
+
+
+
+
+        if(containsStr(inputString, "#AMoff"))
+        {
+          printAM = false;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#AMon"))
+        {
+          printAM = true;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#PHoff"))
+        {
+          printPH = false;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#PHon"))
+        {
+          printPH = true;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#Eff"))
+        {
+          printER = false;
+          Serial.println("Error off");
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#Eon"))
+        {
+          printER = true;
+          Serial.println("Error on");
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#Allon"))
+        {
+          printER = true;
+          printPH = true;
+          printAM = true;
+          printMA = true;
+          printKV = true;
+          Serial.println("All on");
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#Alloff"))
+        {
+          printER = false;
+          printPH = false;
+          printAM = false;
+          printMA = false;
+          printKV = false;
+          Serial.println("All off");
+          stringComplete = false;
+          inputString = "";
+        }
         
+        if(containsStr(inputString, "?PER"))
+        {
+          Serial.print("Period: ");
+          Serial.println(String(period));
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#PER"))
+        {
+          long newPeriod = extractNumber(inputString);
+
+          if(newPeriod > 300)
+          {
+            period = newPeriod;            
+          }
+          
+          Serial.println(String(period));
+          stringComplete = false;
+          inputString = "";
+        }
+
       }
-      Serial.print(MakeERString());
-      Serial.print(MakeAMString());
-      Serial.print(PHString());
+      
+      if(printKV)
+      {
+        String testStr = StrKV + String(KV) + "\n";
+          Serial.print(testStr);
+      }
+
+      if(printER)
+      {
+        Serial.println(MakeERString());
+      }
+      
+
+      if(printAM)
+      {
+        Serial.print(MakeAMString());
+      }
+      
+
+      if(printPH)
+      {
+        Serial.println(PHString());
+      }
+      
+      if(printMA)
+      {
+         String testStr = StrMA + String(MA) + "\n";
+          Serial.println(testStr);
+      }
       startMillis = millis();
   }
-    //Serial.write("!ER0,0,0,0,0,1,0,0\n");
-    //Serial.write("!XO,024,023,019,5777<\n");
-    //Serial.write("!PH1200,600,0<\n");
+   
 }
 
 
@@ -230,13 +393,13 @@ String MakeAMString()
 
 String MakeERString()
 {
-  String newER = ER + ER0 + "," + ER1+ "," + ER2+ "," + ER3+ "," + ER4+ "," + ER5+ "," + ER6+ "," + ER7+ "," + "<" + "\n";
+  String newER = ER + ER0 + "," + ER1+ "," + ER2+ "," + ER3+ "," + ER4 + "," + ER5 + "," + ER6 + "," + ER7 + "," + "<" + "\n";
   return newER;
 }
 
 String PHString()
 {
-  String newPH = "!PH" + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<" + "\n";
+  String newPH = "!PH" + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<\n";
   return newPH;
 }
 
@@ -287,13 +450,13 @@ bool containsKVStr(String inStr)
   } else {
     return false;
   }
-  delay(1000);
+  //delay(1000);
 }
 
 int extractNumber(String inStr)
 {
   String numStr = "";
-
+  
   // Extract numbers from the string
   for (int i = 0; i < inStr.length(); i++) {
     if (isdigit(inStr.charAt(i))) {
@@ -303,6 +466,10 @@ int extractNumber(String inStr)
 
   // Convert the extracted string of numbers to an integer
   int num = atoi(numStr.c_str());
+  //Serial.print(inStr);
+  //Serial.print(" Extract ");
+  //Serial.print(num);
+  //Serial.println("---");
   return num;
 }
 
@@ -338,4 +505,29 @@ byte* convertStringToByteArray(String str)
   byteArray[sizeof(byteArray) -1] = calculateCRC(byteArray, sizeof(byteArray));
 
   return byteArray;
+}
+
+void DumpBytes(String inStr)
+{
+  Serial.println("-----");
+  int iLen = inStr.length();
+  for(int i = 0;i<iLen;i++)
+  {
+    byte a = (byte)inStr[i];
+      Serial.print(a);
+      Serial.print(" ");
+  }
+  Serial.println("");
+  for(int i = 0;i<iLen;i++)
+  {
+    byte a = (byte)inStr[i];
+      Serial.print(a, HEX);
+      Serial.print(" ");
+  }
+
+  Serial.print("\n");
+  Serial.println("Original: " + inStr);
+  Serial.print("String length: ");
+  Serial.println(inStr.length());
+  Serial.println("-----");
 }
