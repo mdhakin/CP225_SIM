@@ -1,3 +1,11 @@
+enum tubeState {
+  idle,
+  preheating,
+  shot
+};
+
+tubeState ts = idle;
+
 // Used to hold data that comes from the serial port
 String readString; 
 
@@ -17,6 +25,7 @@ bool printPH = false;
 bool printER = false;
 bool printMA = false;
 bool printKV = false;
+bool printAT = false;
 
 String AMProto = "!AM0001,0001,0000,0100,045000,150608<\n";
 String AM = "!AM";
@@ -46,14 +55,14 @@ int KV = 600;
 String StrKV = "!KV";
 String requestKV = "?KV";
 String SetKV = "#KV";
-int actualKV = 600;
+int actualKV = 0;
 
 
 unsigned int MA = 1000;
 String StrMA = "!MA";
 String requestMA = "?MA";
 String SetMA = "#MA";
-int actualMA = 1000;
+int actualMA = 0;
 
 String ERProto = "!ER0,0,0,0,0,1,0,0\n";
 String ER = "!ER";
@@ -89,6 +98,7 @@ byte* convertStringToByteArray(String str);
 String MakeERString();
 String PHString();
 String MakeAMString();
+String MakeATString();
 void DumpBytes(String inStr);
 
 
@@ -115,14 +125,13 @@ void loop() {
     ER5 = "0";
   }
   
-  
   if (currentMillis - startMillis >= period)  //test whether the period has elapsed
   {
       if(stringComplete)
       {
+        
         if(containsKVStr(inputString))
         {
-          
           KV = extractNumber(inputString);
           Serial.println(inputString);
           stringComplete = false;
@@ -130,7 +139,6 @@ void loop() {
           String testStr = StrKV + String(KV) + "\n";
           Serial.print(testStr);
         }
-     
         if(containsStr(inputString, requestKV))
         {
           String testStr = StrKV + String(KV) + "\n";
@@ -138,11 +146,65 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
+        if(containsStr(inputString, "?ST"))
+        {
+          String tempStateString = "";
+          if(ts == idle)
+          {
+            tempStateString = "ST:idle";
+          }else if (ts == preheating)
+          {
+            tempStateString = "ST:preheat";
+          }
+          else
+          {
+            tempStateString = "ST:shot";
+          }
+          Serial.println(tempStateString);
+          stringComplete = false;
+          inputString = "";
+        }        
+        if(containsStr(inputString, "#ST"))
+        {
+          ts = idle;
+          actualKV = 0;
+          actualMA = 0;
+          AM0 = 0;
+          AM1 = 0;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#TS0"))
+        {
+          ts = idle;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#TS1") && ER5 == "1")
+        {
+          ts = preheating;
+          actualKV = KV;
+          AM0 = KV;
+          actualMA = MA;
+          AM1 = MA;
+          stringComplete = false;
+          inputString = "";
+        }
 
-        
+        if(containsStr(inputString, "#TS2") && ER5 == "0")
+        {
+          ts = shot;
+          actualKV = KV;
+          AM0 = KV;
+          actualMA = MA;
+          AM1 = MA;
+          stringComplete = false;
+          inputString = "";
+        }
         if(containsStr(inputString, SetMA))
         {
           MA = extractNumber(inputString);
+          
           stringComplete = false;
           inputString = "";
           String testStr = StrMA + String(MA) + "\n";
@@ -155,7 +217,6 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
-
         if(containsStr(inputString, requestPH))
         {
           String testStr = StrPH + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<\n";
@@ -163,7 +224,22 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
-
+        if(containsStr(inputString, "#phone"))
+        {
+          ph1 = extractNumber(inputString);
+          stringComplete = false;
+          inputString = "";
+          String testStr = StrPH + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<\n";
+          Serial.println(testStr);
+        }
+        if(containsStr(inputString, "#phtwo"))
+        {
+          ph2 = extractNumber(inputString);
+          stringComplete = false;
+          inputString = "";
+          String testStr = StrPH + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<\n";
+          Serial.println(testStr);
+        }        
         if(containsStr(inputString, changeErr))
         {
           
@@ -181,9 +257,7 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
-
-
-         if(containsStr(inputString, "#Moff"))
+        if(containsStr(inputString, "#Moff"))
         {
           printMA = false;
           stringComplete = false;
@@ -195,8 +269,6 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
-
-
         if(containsStr(inputString, "#Koff"))
         {
           printKV = false;
@@ -209,10 +281,18 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }        
-
-
-
-
+        if(containsStr(inputString, "#AToff"))
+        {
+          printAT = false;
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#ATon"))
+        {
+          printAT = true;
+          stringComplete = false;
+          inputString = "";
+        }        
         if(containsStr(inputString, "#AMoff"))
         {
           printAM = false;
@@ -256,6 +336,7 @@ void loop() {
           printER = true;
           printPH = true;
           printAM = true;
+          printAT = true;
           printMA = true;
           printKV = true;
           Serial.println("All on");
@@ -267,13 +348,13 @@ void loop() {
           printER = false;
           printPH = false;
           printAM = false;
+          printAT = false;
           printMA = false;
           printKV = false;
           Serial.println("All off");
           stringComplete = false;
           inputString = "";
         }
-        
         if(containsStr(inputString, "?PER"))
         {
           Serial.print("Period: ");
@@ -294,40 +375,35 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }
-
       }
-      
       if(printKV)
       {
         String testStr = StrKV + String(KV) + "\n";
           Serial.print(testStr);
       }
-
       if(printER)
       {
         Serial.println(MakeERString());
       }
-      
-
       if(printAM)
       {
         Serial.print(MakeAMString());
       }
-      
-
       if(printPH)
       {
         Serial.println(PHString());
       }
-      
       if(printMA)
       {
          String testStr = StrMA + String(MA) + "\n";
           Serial.println(testStr);
       }
+      if(printAT)
+      {
+        Serial.print(MakeATString());
+      }
       startMillis = millis();
   }
-   
 }
 
 
@@ -344,9 +420,48 @@ void loop() {
 
 
 
+String MakeATString()
+{
 
+  String sAT0 = String(AT0);
+  int at0len = sAT0.length();
+  int at0toadd = 3 - at0len;
 
+  for(int i = 0;i < at0toadd;i++)
+  {
+    sAT0 = "0" + sAT0;
+  }
+  
+  String sAT1 = String(AT1);
+  int at1len = sAT1.length();
+  int at1toadd = 3 - at1len;
 
+  for(int i = 0;i < at1toadd;i++)
+  {
+    sAT1 = "0" + sAT1;
+  }
+
+   String sAT2 = String(AT2);
+  int at2len = sAT2.length();
+  int at2toadd = 3 - at2len;
+
+  for(int i = 0;i < at2toadd;i++)
+  {
+    sAT2 = "0" + sAT2;
+  }
+
+  String sAT3 = String(AT3);
+  int at3len = sAT3.length();
+  int at3toadd = 3 - at3len;
+
+  for(int i = 0;i < at3toadd;i++)
+  {
+    sAT3 = "0" + sAT3;
+  }
+  
+  String newAT = AT + sAT0 + "," + sAT1 + "," + sAT2 + "," + sAT3 + "," + String(AT4) + "<" + "\n";
+  return newAT;
+}
 String MakeAMString()
 {
 
@@ -389,24 +504,19 @@ String MakeAMString()
   String newAM = AM + sAM0 + "," + sAM1 + "," + sAM2 + "," + sAM3 + "," + "0" + String(AM4) + "," + String(AM5) + "<" + "\n";
   return newAM;
 }
-
-
 String MakeERString()
 {
   String newER = ER + ER0 + "," + ER1+ "," + ER2+ "," + ER3+ "," + ER4 + "," + ER5 + "," + ER6 + "," + ER7 + "," + "<" + "\n";
   return newER;
 }
-
 String PHString()
 {
   String newPH = "!PH" + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<\n";
   return newPH;
 }
-
 void serial_flush(void) {
   while (Serial.available()) Serial.read();
 }
-
 void readstring()
 {
     while (Serial.available()) {
@@ -424,8 +534,6 @@ void readstring()
         }
     }
 }
-
-
 bool containsStr(String inStr, String substr)
 {
   //String substr = "#KV";
@@ -438,8 +546,6 @@ bool containsStr(String inStr, String substr)
   }
   delay(1000);
 }
-
-
 bool containsKVStr(String inStr)
 {
   String substr = "#KV";
@@ -452,7 +558,6 @@ bool containsKVStr(String inStr)
   }
   //delay(1000);
 }
-
 int extractNumber(String inStr)
 {
   String numStr = "";
@@ -472,7 +577,6 @@ int extractNumber(String inStr)
   //Serial.println("---");
   return num;
 }
-
 byte calculateCRC(byte data[], int len)
 {
     byte crc = 0;
@@ -490,7 +594,6 @@ byte calculateCRC(byte data[], int len)
     }
     return crc;
 }
-
 byte* convertStringToByteArray(String str)
 {
   char charArray[str.length() + 1];
@@ -506,7 +609,6 @@ byte* convertStringToByteArray(String str)
 
   return byteArray;
 }
-
 void DumpBytes(String inStr)
 {
   Serial.println("-----");
