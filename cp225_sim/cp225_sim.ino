@@ -5,7 +5,7 @@ enum tubeState {
 };
 
 tubeState ts = idle;
-
+int iDelay = 5;
 // Used to hold data that comes from the serial port
 String readString; 
 
@@ -18,7 +18,14 @@ bool stringComplete = false;
 unsigned long startMillis;  //some global variables available anywhere in the program
 unsigned long currentMillis;
 unsigned long period = 1500;  //the value is a number of milliseconds
+unsigned long startMillis2;  //some global variables available anywhere in the program
+unsigned long currentMillis2;
+unsigned long period2 = 1000;  //the value is a number of milliseconds
 unsigned long ticks = 0;
+
+bool bShootingRays = false;
+bool bPower = false;
+
 
 bool printAM = false;
 bool printPH = false;
@@ -106,7 +113,8 @@ void DumpBytes(String inStr);
 void setup() {
   // put your setup code here, to run once:
   startMillis = millis();  //initial start time
-                                           
+  startMillis2 = millis();  //initial start time
+  pinMode(LED_BUILTIN, OUTPUT);                                        
   Serial.begin(19200);
   Serial.println("Ready");
   Serial.print(MakeERString());
@@ -117,6 +125,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   readstring();
   currentMillis = millis();
+  currentMillis2 = millis();
   if(KV > ph2)
   {
     ER5 = "1";
@@ -125,27 +134,105 @@ void loop() {
     ER5 = "0";
   }
   
+  if (currentMillis2 - startMillis2 >= period2)  //test whether the period has elapsed
+  {
+    if(bShootingRays)
+    {
+      String testStr = "!XO\n";
+      Serial.println(testStr);
+    }
+    startMillis2 = millis();
+  }
+  
   if (currentMillis - startMillis >= period)  //test whether the period has elapsed
   {
+      updateActualKVandMAValues();
+      if(bShootingRays)
+      {
+        Serial.println("!!XRay ON!!");
+      }
+      
+      if(true)
+      {
+          String oput = MakeERString() + "\n" + PHString() + "|n" + MakeATString() + StrKV + String(KV) + "<\n" + StrMA + String(MA);
+          Serial.println(oput);
+          delay(200);
+          Serial.println( PHString());
+          Serial.println( StrKV + String(KV));
+          
+          Serial.flush();
+      }
+
       if(stringComplete)
       {
+        if(containsStr(inputString, "#ST"))
+        {
+          ts = idle;
+          bPower = false;
+          bShootingRays = false;
+          stringComplete = false;
+          inputString = "";
+          Serial.println("Stop signal received");
+          updateActualKVandMAValues();
+        }
         
-        if(containsKVStr(inputString))
+        if(containsStr(inputString, "?PW"))
         {
-          KV = extractNumber(inputString);
-          Serial.println(inputString);
-          stringComplete = false;
-          inputString = "";
-          String testStr = StrKV + String(KV) + "\n";
-          Serial.print(testStr);
-        }
-        if(containsStr(inputString, requestKV))
-        {
-          String testStr = StrKV + String(KV) + "\n";
-          Serial.print(testStr);
+          if(bPower)
+          {
+            Serial.println("Power On");
+          }else
+          {
+            Serial.println("Power Off");
+          }
           stringComplete = false;
           inputString = "";
         }
+        if(containsStr(inputString, "#PW"))
+        {
+          if(ER5 == "0" && ts != idle)
+          {
+            bPower = true;
+          }else
+          {
+            bPower = false;            
+          }
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "?KV"))
+        {
+          String testStr = StrKV + String(KV) + "<\n";
+          Serial.println(testStr);
+          stringComplete = false;
+          inputString = "";
+          Serial.flush();
+        }        
+        //if(containsStr(inputString, "?MA"))
+        if(true)
+        {
+          String testStr1 = StrMA + String(MA) + "<\n" + StrMA + String(MA) + "<\n";
+          Serial.println(testStr1);
+          //stringComplete = false;
+          //inputString = "";
+          delay(iDelay);
+        }
+        if(containsStr(inputString, "#ON"))
+        {
+          if(bPower)
+          {
+            bShootingRays = true;
+          }
+          stringComplete = false;
+          inputString = "";
+        }
+        if(containsStr(inputString, "#XO"))
+        {
+          Serial.println("Recieved Heartbeat Response");
+          stringComplete = false;
+          inputString = "";
+        }
+        
         if(containsStr(inputString, "?ST"))
         {
           String tempStateString = "";
@@ -164,15 +251,12 @@ void loop() {
           stringComplete = false;
           inputString = "";
         }        
-        if(containsStr(inputString, "#ST"))
+        if(containsStr(inputString, "#KV"))
         {
-          ts = idle;
-          actualKV = 0;
-          actualMA = 0;
-          AM0 = 0;
-          AM1 = 0;
-          stringComplete = false;
-          inputString = "";
+          int temp = extractNumber(inputString);
+          KV = temp;
+          String testStr = StrKV + String(KV) + "<\n";
+          Serial.println(testStr);          
         }
         if(containsStr(inputString, "#TS0"))
         {
@@ -194,10 +278,7 @@ void loop() {
         if(containsStr(inputString, "#TS2") && ER5 == "0")
         {
           ts = shot;
-          actualKV = KV;
-          AM0 = KV;
-          actualMA = MA;
-          AM1 = MA;
+          
           stringComplete = false;
           inputString = "";
         }
@@ -210,13 +291,7 @@ void loop() {
           String testStr = StrMA + String(MA) + "\n";
           Serial.println(testStr);
         }
-        if(containsStr(inputString, requestMA) || containsStr(inputString, "?MA3"))
-        {
-          String testStr = StrMA + String(MA) + "\n";
-          Serial.println(testStr);
-          stringComplete = false;
-          inputString = "";
-        }
+        
         if(containsStr(inputString, requestPH))
         {
           String testStr = StrPH + String(ph1) + "," + String(ph2) + "," + String(ph3) + "<\n";
@@ -378,12 +453,14 @@ void loop() {
       }
       if(printKV)
       {
-        String testStr = StrKV + String(KV) + "\n";
+        String testStr = StrKV + String(KV) + "<\n";
           Serial.print(testStr);
+          delay(iDelay);
       }
       if(printER)
       {
         Serial.println(MakeERString());
+        delay(iDelay);
       }
       if(printAM)
       {
@@ -395,7 +472,7 @@ void loop() {
       }
       if(printMA)
       {
-         String testStr = StrMA + String(MA) + "\n";
+         String testStr = StrMA + String(MA) + "<\n";
           Serial.println(testStr);
       }
       if(printAT)
@@ -406,6 +483,28 @@ void loop() {
   }
 }
 
+void updateActualKVandMAValues()
+{
+  if(ts != idle && bPower && bShootingRays && ER5 == "0")
+  {
+    AM0 = KV;
+    AM1 = MA; 
+    digitalWrite(LED_BUILTIN, HIGH);
+  }else if(ts == shot && bPower && bShootingRays && ER5 == "1")
+  {
+    
+    bPower = false;          
+    bShootingRays = false;
+    AM0 = 0;
+    AM1 = 0;
+    digitalWrite(LED_BUILTIN, LOW);
+  }else
+  {
+    AM0 = 0;
+    AM1 = 0;
+    digitalWrite(LED_BUILTIN, LOW);
+  }
+}
 
 
 
@@ -459,7 +558,7 @@ String MakeATString()
     sAT3 = "0" + sAT3;
   }
   
-  String newAT = AT + sAT0 + "," + sAT1 + "," + sAT2 + "," + sAT3 + "," + String(AT4) + "<" + "\n";
+  String newAT = AT + sAT0 + "," + sAT1 + "," + sAT2 + "," + sAT3 + "," + String(AT4) + "\n";
   return newAT;
 }
 String MakeAMString()
